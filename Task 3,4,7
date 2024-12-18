@@ -1,0 +1,173 @@
+"Task 3 & 4"
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+import matplotlib.pyplot as plt
+
+# Constants
+L = 10000  # in meters (domain length)
+z = 10000  # in meters (height)
+R = 287.05  # specific gas constant
+g = 9.81  # gravity
+gamma = 0.0065  # temperature lapse rate
+P_0 = 1013  # sea-level pressure (hPa)
+height = np.linspace(0, z, 10)  # Altitudes in meters
+x = np.linspace(-L, L, 200)  # Positions along the coast
+t = np.linspace(0, 24, 9)  # Time points during the day
+
+# Temperature variations
+A_s = np.linspace(1, 2, 100)
+A_l = np.linspace(2, 4, 100)
+T_s = np.cos(t * 2 * np.pi / 24 + 18 * np.pi / 24)  # Normalized diurnal cycle
+T_land = 7.5 * A_l[:, None] * T_s + 290  # Land temperatures
+T_sea = 2.5 * A_s[:, None] * T_s + 295  # Sea temperatures
+
+# Pre-allocate grids
+full_grid_T = np.zeros((200, len(height), len(t)))  # Temperature grid
+full_grid_P = np.zeros_like(full_grid_T)  # Pressure grid
+full_grid_rho = np.zeros_like(full_grid_T)  # Density grid
+
+# Fill the grids efficiently using broadcasting
+T_land_3D = T_land[:, None, :] - gamma * height[None, :, None]
+T_sea_3D = T_sea[:, None, :] - gamma * height[None, :, None]
+
+# Combine sea and land data
+full_grid_T[:100, :, :] = T_sea_3D
+full_grid_T[100:, :, :] = T_land_3D
+
+# Calculate pressure and density
+full_grid_P = P_0 * np.exp(-g * height[None, :, None] / (R * full_grid_T))
+full_grid_rho = (full_grid_P / (R * full_grid_T))*100
+
+# Plot temperature profiles
+plt.figure(figsize=(12, 6), dpi=150)
+
+# Sea profiles
+for j in range(len(height)):
+    plt.plot(t, full_grid_T[0, j, :], label=f"Sea {height[j]/1000:.1f} km", marker="o")
+
+# Land profiles
+for j in range(len(height)):
+    plt.plot(t, full_grid_T[-1, j, :], label=f"Land {height[j]/1000:.1f} km", marker="d")
+
+# Customize the plot
+plt.xlabel("Time (hours)")
+plt.ylabel("Temperature (K)")
+plt.title("Temperature Profiles over Time (Sea and Land)")
+plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+plt.tight_layout()
+plt.grid(True)
+#plt.savefig("temp_evolution_atmosphere.png", dpi=300)
+plt.show()
+# Optionally, you can specify a path where you want to save the file
+# For example, to save it on your desktop (Mac or Linux)
+# plt.savefig("/home/your_username/Desktop/temperature_pressure_density_plots.png", dpi=300)
+# Or on Windows:
+# plt.savefig(r"C:\Users\YourUsername\Desktop\temperature_pressure_density_plots.png", dpi=300)
+
+# Close the plot to free up memory if you don't need to show it
+#plt.close()
+
+# Create subplots for temperature and pressure/density
+fig, axes = plt.subplots(4, 2, figsize=(12, 16))
+fig.suptitle("Temperature, Pressure, and Density at Different Times", fontsize=16)
+selected_times = [1, 3, 5, 7]  # Indices for t = 3am, 9am, 3pm, 9pm, comes from the 8 time steps
+
+for row, time_idx in enumerate(selected_times):
+    # Temperature plot
+    temp_plot = axes[row, 0].contourf(x, height, np.transpose(full_grid_T[:, :, time_idx]),
+        levels=11, cmap='viridis', alpha=0.8
+    )
+    axes[row, 0].set_title(f"Temperature (t = {t[time_idx]}h)")
+    axes[row, 0].set_xlabel("X (Horizontal Distance)")
+    axes[row, 0].set_ylabel("Height (m)")
+    fig.colorbar(temp_plot, ax=axes[row, 0])
+
+    # Pressure and density plot
+    cont = axes[row, 1].contourf(x, height,
+        np.transpose(full_grid_P[:, :, time_idx]),
+        levels=20, cmap='plasma', alpha=0.8
+    )
+    cont_lines = axes[row, 1].contour(x, height,
+        np.transpose(full_grid_rho[:, :, time_idx]),
+        colors='black', linewidths=0.5
+    )
+    axes[row, 1].clabel(cont_lines, fmt="%.2f", fontsize=8)
+    axes[row, 1].set_title(f"Pressure and Density (t = {t[time_idx]}h)") #Rajouter un facteur de pente pour la pression
+    axes[row, 1].set_xlabel("X (Horizontal Distance)")
+    axes[row, 1].set_ylabel("Height (m)")
+    fig.colorbar(cont, ax=axes[row, 1])
+
+# Adjust the spacing between subplots
+plt.subplots_adjust(hspace=0.4, wspace=0.3)  # Increase vertical and horizontal spacing
+
+# Adjust layout and show the plot
+plt.tight_layout(rect=[0, 0, 1, 0.96])  # Add space for the suptitle
+plt.show()
+
+
+
+"Task 7 : Température uniforme"
+
+
+
+# Temperature functions
+A_s = 2.5
+A_l = 7.5
+T_s = np.cos((t+9) * 2 * np.pi / 24)
+T_land = A_l * T_s + 290.5
+T_sea = A_s * T_s + 290.5
+
+
+# Grid initialization
+full_grid_T = np.zeros((200, 10, 9)) #i = longueur totale, j = hauteur, k = pas de temps ; 9 dans la journée
+full_grid_P = np.zeros((200, 10, 9))
+full_grid_rho = np.zeros((200, 10, 9))
+
+# Fill the grids
+for i in range(len(x)):
+    for j in range(len(height)):
+        for k in range(len(t)):
+            if i <= 100:  # Sea region
+                T_local = T_sea[k] - gamma * height[j] 
+            else:  # Land region
+                T_local = T_land[k] - gamma * height[j]
+
+            full_grid_T[i][j][k] = T_local
+            full_grid_P[i][j][k] = P_0 * np.exp(-g * height[j] / (R * T_local))
+            full_grid_rho[i][j][k] = (full_grid_P[i][j][k] / (R * T_local))*100
+
+# Time points for additional plots
+selected_times = [1, 3, 5, 7]  # Indices for t = 3am, 9am, 3pm, 9pm, comes from the 8 time steps
+
+# Create subplots for temperature and pressure/density
+fig, axes = plt.subplots(4, 2, figsize=(12, 16))
+fig.suptitle("Temperature, Pressure, and Density at Different Times", fontsize=16)
+
+for row, time_idx in enumerate(selected_times):
+    # Temperature plot
+    temp_plot = axes[row, 0].contourf(x, height, np.transpose(full_grid_T[:, :, time_idx]),
+        levels=11, cmap='viridis', alpha=0.8
+    )
+    axes[row, 0].set_title(f"Temperature (t = {t[time_idx]}h)")
+    axes[row, 0].set_xlabel("X (Horizontal Distance)")
+    axes[row, 0].set_ylabel("Height (m)")
+    fig.colorbar(temp_plot, ax=axes[row, 0])
+
+    # Pressure and density plot
+    cont = axes[row, 1].contourf(x, height,
+        np.transpose(full_grid_P[:, :, time_idx]),
+        levels=20, cmap='plasma', alpha=0.8
+    )
+    cont_lines = axes[row, 1].contour(x, height,
+        np.transpose(full_grid_rho[:, :, time_idx]),
+        colors='black', linewidths=0.5
+    )
+    axes[row, 1].clabel(cont_lines, fmt="%.2f", fontsize=8)
+    axes[row, 1].set_title(f"Pressure and Density (t = {t[time_idx]}h)") #Rajouter un facteur de pente pour la pression
+    axes[row, 1].set_xlabel("X (Horizontal Distance)")
+    axes[row, 1].set_ylabel("Height (m)")
+    fig.colorbar(cont, ax=axes[row, 1])
+
+plt.tight_layout(rect=[0, 0, 1, 0.96])
+plt.show()
