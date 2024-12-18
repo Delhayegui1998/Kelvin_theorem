@@ -1,1 +1,232 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+import math
 
+# Constants
+L = 10000  # in meters (domain length)
+R = 287.05  # specific gas constant
+g = 9.81  # gravity
+gamma = 0.0065  # temperature lapse rate
+P_0 = 101300 # sea-level pressure (hPa)
+
+
+t = np.linspace(0, 24, 9)  # time points
+
+#Task 5 
+
+height = np.linspace(0, 10000, 200)  # Hauteurs de 0 à 10 km
+x = np.linspace(-L, L, 200)  # Positions le long de la côte
+
+# Grid initialization
+full_grid_T = np.zeros((len(x), len(height), len(t))) #i = longueur totale, j = hauteur, k = pas de temps ; 9 dans la journée
+full_grid_P = np.zeros((len(x), len(height), len(t)))
+#full_grid_rho = np.zeros((200, 200, 9))
+
+# Generate random or default values for A_s and A_l
+#np.random.seed(42)  # Fix seed for reproducibility
+#A_s = np.random.uniform(1, 5)  # Amplitude for the sea
+#A_l = np.random.uniform(4, 10)  # Amplitude for the land
+# Fill the grids
+
+# Temperature functions
+A_s = np.linspace(1, 2, 100)
+A_l = np.linspace(2, 4, 100)
+#T_s = np.cos((t * 2 * np.pi / 24) + 18 * np.pi / 24)  # Normalized diurnal cycle BON POUR ACCELERATION
+T_s = np.cos((t * 2 * np.pi / 24) + 15 * 2 * np.pi / 24) #Montre une décroissance de vitesse du aux frottements mais convient pour un autre sommet
+T_sea = 2.5 * A_s[:, None] * T_s + 293 # Sea temperature profile
+T_land = 7.5 * A_l[:, None] * T_s + 292  # Land temperature profile
+
+print('T_s', T_s)
+# Fill temperature and pressure grids
+for i in range(len(x)):
+    if i < 100:  # Sea region
+        T_local = T_sea[i, None, :] - gamma * height[None, :, None]
+    else:  # Land region
+        T_local = T_land[i - 100, None, : ] - gamma * height[None, :, None]
+    
+    full_grid_T[i, :, :] = T_local
+    full_grid_P[i, :, :] = P_0 * np.exp(-g * height[ None ,:, None] / (R * T_local))
+
+
+# Compute average temperatures at boundaries
+T_1 = full_grid_T[0, :, :].mean(axis=0)  # Average temperature at sea boundary
+T_2 = full_grid_T[199, :, :].mean(axis=0)  # Average temperature at land boundary
+print('Température bord mer :', T_1)
+print('Température bord terre :', T_2)
+
+# Initialize the tangential velocity grid (same size as the temperature grid)
+v_tangential = np.zeros((len(height),len(t)))
+
+
+# Compute the tangential velocity for each time step using the pressure and temperature gradient
+for i in range(len(x)):
+    for k in range(len(t)):  # Loop over time steps
+        for j in range(len(height)):  # Loop over heights
+            # T_current = full_grid_T[0, 0, k]
+            # T_previous = full_grid_T[199, 0, k]
+        
+            P_current =  full_grid_P[i, j, k]
+            # P_previous = full_grid_P[i, j, k - 1]
+        
+            # Compute the pressure gradient (simplified model for demonstration)
+            dp = P_0/P_current
+        
+            # Assuming the velocity change is proportional to the pressure gradient (simplified model)
+            dv_dt = ((R * np.log(dp)) * (T_2[k] - T_1[k])) / (2* (height[j] + 2*L)) 
+
+            # Perform Euler integration for the tangential velocity
+            if k > 0: 
+                v_tangential[j, k] = v_tangential[j, k - 1] + dv_dt * (t[k] - t[k - 1])
+
+# Plotting tangential velocity
+plt.figure(figsize=(10, 6))
+contour = plt.contourf(t, height, v_tangential, levels=20, cmap="coolwarm", extend="both")
+cbar = plt.colorbar(contour, label="Tangential Velocity (m/s)")
+cbar.set_ticks(np.linspace(v_tangential.min(), v_tangential.max(), 10))  # Plus de marquages
+cbar.ax.tick_params(labelsize=10)  # Ajuste la taille des labels de la colorbar
+plt.title("Tangential Velocity Across Time and Height (Figure 3)")
+plt.xlabel("Time (hours)")
+plt.ylabel("Height (m)")
+#plt.gca().invert_yaxis()  # Invert y-axis to match increasing height
+plt.show()
+
+#Task 6.1
+# Paramètres
+mu = 5e-3 # Coefficient de frottement linéaire (1/s)
+# Initialiser le tableau pour stocker les vitesses tangentielle
+v_tangential_linear = np.zeros((len(height), len(t)))  # Initialiser les vitesses à zéro
+
+# Compute the tangential velocity for each time step using the pressure and temperature gradient
+for i in range(len(x)):
+    for k in range(len(t)):  # Loop over time steps
+        for j in range(len(height)):  # Loop over heights
+            P_current = full_grid_P[i, j, k]
+
+            # Calculer le gradient de pression
+            dp = P_0 / P_current
+
+            # Calculer l'accélération tangentielle avec frottement
+            dv_dt_linear = - mu * v_tangential_linear[j, k] + (((R * np.log(dp)) * (T_2[k] - T_1[k])) / (2 * (height[j] + 2*L))) 
+
+            # Mise à jour de la vitesse tangentielle par intégration d'Euler
+            if k > 0:  # Éviter les indices négatifs
+                v_tangential_linear[j, k] = v_tangential_linear[j, k - 1] + dv_dt_linear * (t[k] - t[k - 1])
+
+# Plotting tangential velocity
+plt.figure(figsize=(10, 6))
+contour_1 = plt.contourf(t, height, v_tangential_linear, levels=20, cmap="coolwarm", extend="both")
+cbar_1 = plt.colorbar(contour_1, label="Tangential Velocity (m/s)")
+cbar_1.set_ticks(np.linspace(v_tangential_linear.min(), v_tangential_linear.max(), 10))  # Plus de marquages
+cbar_1.ax.tick_params(labelsize=10)  # Ajuste la taille des labels de la colorbar
+plt.title("Tangential Velocity Across Time and Height with Linear Friction (Figure 4.1)")
+plt.xlabel("Time (hours)")
+plt.ylabel("Height (m)")
+plt.show()
+
+#Task 6.2
+# Paramètres
+Cd = 0.003  # Coefficient de frottement linéaire (m)
+coriolis = 1.13e-4  # Coriolis effect (rad/s)
+
+# Initialiser le tableau pour stocker les vitesses tangentielle
+v_tangential_quadratic = np.zeros((len(height), len(t)))  # Initialiser les vitesses à zéro
+
+# Compute the tangential velocity for each time step using the pressure and temperature gradient
+for i in range(len(x)):
+    for k in range(len(t)):  # Loop over time steps
+        for j in range(len(height)):  # Loop over heights
+            P_current = full_grid_P[i, j, k]
+
+            # Calculer le gradient de pression
+            dp = P_0 / P_current
+
+            # Calculer l'accélération tangentielle avec frottement
+            dv_dt_quadratic = - Cd * v_tangential_quadratic[j, k]**2 - coriolis*v_tangential_quadratic[j,k] + ((((R * np.log(dp)) * (T_2[k] - T_1[k])) / (2 * (height[j] + 2*L)))) 
+
+            # Mise à jour de la vitesse tangentielle par intégration d'Euler
+            if k > 0:  # Éviter les indices négatifs
+                v_tangential_quadratic[j, k] = v_tangential_quadratic[j, k - 1] + dv_dt_quadratic * (t[k] - t[k - 1])
+
+# Plotting tangential velocity
+plt.figure(figsize=(10, 6))
+contour_2 = plt.contourf(t, height, v_tangential_quadratic, levels=20, cmap="coolwarm", extend="both")
+cbar_2 = plt.colorbar(contour_2, label="Tangential Velocity (m/s)")
+cbar_2.set_ticks(np.linspace(v_tangential_quadratic.min(), v_tangential_quadratic.max(), 10))  # Plus de marquages
+cbar_2.ax.tick_params(labelsize=10)  # Ajuste la taille des labels de la colorbar
+plt.title("Tangential Velocity Across Time and Height with Quadratic Friction (Figure 4.2)")
+plt.xlabel("Time (hours)")
+plt.ylabel("Height (m)")
+plt.show()
+
+#Task 6 bonus - Accélération
+
+# Initialize the tangential velocity grid (same size as the temperature grid)
+dv_dt_grid = np.zeros((len(height), len(t)))  # Accélération tangentielle (hauteur, temps)
+
+
+# Compute the tangential velocity for each time step using the pressure and temperature gradient
+for i in range(len(x)):
+    for k in range(len(t)):  # Loop over time steps
+        for j in range(len(height)):  # Loop over heights
+            # T_current = full_grid_T[0, 0, k]
+            # T_previous = full_grid_T[199, 0, k]
+            P_current =  full_grid_P[i, j, k]
+            # P_previous = full_grid_P[i, j, k - 1]
+            if P_current > 1e-10:
+            # Compute the pressure gradient (simplified model for demonstration)
+                dp = P_0/P_current
+        
+            # Assuming the velocity change is proportional to the pressure gradient (simplified model)
+            if k >0 :
+                dv_dt_acc = ((R * np.log(dp)) * (T_2[k] - T_1[k])) / (2* (height[j] + 2 * L)) 
+                dv_dt_grid[j, k] = dv_dt_acc  # Stocker dans la grille
+
+# Plotting tangential acceleration
+plt.figure(figsize=(10, 6))
+plt.contourf(t, height, dv_dt_grid, levels=20, cmap="coolwarm", extend="both")
+plt.colorbar(label="Tangential acceleration (m/s^2)")
+plt.title("Tangential acceleration Across Time and Height (Figure 3)")
+plt.xlabel("Time (hours)")
+plt.ylabel("Height (m)")
+plt.show()
+#########
+
+#Bonus : vérification des mesures obtenues dans la partie théorique à l'aide de notre modèle
+
+# Paramètres donnés
+L = 15000  # Longueur du domaine en mètres (15 km)
+h = 1000   # Hauteur de la couche limite en mètres (1 km)
+T_diff = 5  # Différence de température en K
+p_0 = 1000 * 10**2  # Pression à 0 m (1000 hPa en Pa)
+p_850 = 850 * 10**2  # Pression à 850 hPa en Pa
+
+# Constantes  # Constante spécifique des gaz parfaits pour l'air (J/(kg*K))
+g = 9.81  # Accélération due à la gravité en m/s²
+
+# Estimation de la densité de l'air à la surface et à 850 hPa
+T_surface = 300  # Température de surface (en K, à ajuster selon les données locales)
+T_850 = T_surface - T_diff  # Température à 850 hPa (en K)
+
+# Densité de l'air à la surface et à 850 hPa en utilisant l'équation des gaz parfaits
+rho_surface = p_0 / (R * T_surface)  # Densité à la surface (kg/m^3)
+rho_850 = p_850 / (R * T_850)  # Densité à 850 hPa (kg/m^3)
+
+# Calcul du gradient de pression (simplifié)
+dp_dx = p_0/p_850 # Gradient de pression en Pa/m
+
+mu = 5e-3
+Cd = 3e-3
+coriolis = 1.13e-4
+# Calcul de l'accélération tangentielle
+# On suppose que l'accélération est liée à la différence de pression et aux densités
+acc_tangential = ((R * np.log(dp_dx)) * (T_diff)) / (2* (h + L)) 
+v_tangential_linear = ((R * np.log(dp_dx)) * (T_diff)) / (2* (h + L)*mu) 
+v_tangential_quadratic = (-coriolis + np.sqrt(coriolis**2 + 4 * Cd * acc_tangential))/(2*Cd)
+acc_tangential_linear = v_tangential_linear/3600
+acc_tangential_quadratic = v_tangential_quadratic/3600
+
+# Affichage de l'accélération tangentielle
+print(f"Accélération tangentielle estimée : {acc_tangential:.5e} m/s²")
+print(f"Accélération tangentielle avec frottement linéaire estimée : {acc_tangential_linear:.5e} m/s²")
+print(f"Accélération tangentielle avec frottement quadratique estimée : {acc_tangential_quadratic:.5e} m/s²")
